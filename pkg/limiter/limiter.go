@@ -28,20 +28,14 @@ func NewRateLimiter(storage storage.Storage, config Config) *RateLimiter {
 
 func (rl *RateLimiter) CheckLimit(ctx context.Context, ip, token string) error {
 	if token != "" {
+		// Check if token is blocked
 		if blocked, err := rl.storage.IsBlocked(ctx, token); err != nil {
 			return fmt.Errorf("failed to check token block status: %v", err)
 		} else if blocked {
 			return fmt.Errorf("token rate limit exceeded")
 		}
-	}
 
-	if blocked, err := rl.storage.IsBlocked(ctx, ip); err != nil {
-		return fmt.Errorf("failed to check IP block status: %v", err)
-	} else if blocked {
-		return fmt.Errorf("IP rate limit exceeded")
-	}
-
-	if token != "" {
+		// Apply token-based rate limiting
 		count, err := rl.storage.Increment(ctx, token, time.Second)
 		if err != nil {
 			return fmt.Errorf("failed to increment token counter: %v", err)
@@ -57,9 +51,19 @@ func (rl *RateLimiter) CheckLimit(ctx context.Context, ip, token string) error {
 			}
 			return fmt.Errorf("token rate limit exceeded")
 		}
+
+		// Don't validate IP limit
 		return nil
 	}
 
+	// Check if IP is blocked
+	if blocked, err := rl.storage.IsBlocked(ctx, ip); err != nil {
+		return fmt.Errorf("failed to check IP block status: %v", err)
+	} else if blocked {
+		return fmt.Errorf("IP rate limit exceeded")
+	}
+
+	// Apply IP-based rate limiting
 	count, err := rl.storage.Increment(ctx, ip, time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to increment IP counter: %v", err)
